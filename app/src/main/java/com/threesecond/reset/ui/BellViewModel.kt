@@ -25,7 +25,8 @@ data class AppState(
     val isRunning:   Boolean = false,
     val isPaused:    Boolean = false,
     val inWindow:    Boolean = false,
-    val nextBuzzMs:  Long    = -1L
+    val nextBuzzMs:  Long    = -1L,
+    val prefsLoaded: Boolean = false   // gate so Start is only shown after prefs load
 )
 
 class BellViewModel(application: Application) : AndroidViewModel(application) {
@@ -34,8 +35,9 @@ class BellViewModel(application: Application) : AndroidViewModel(application) {
     val state: StateFlow<AppState> = _state.asStateFlow()
 
     init {
-        viewModelScope.launch { loadPrefs() }
-        _state.update { it.copy(isRunning = BellService.isRunning, isPaused = BellService.isPaused) }
+        viewModelScope.launch {
+            loadPrefs()
+        }
     }
 
     private suspend fun loadPrefs() {
@@ -48,14 +50,23 @@ class BellViewModel(application: Application) : AndroidViewModel(application) {
             endMinute   = prefs[intPreferencesKey("end_minute")]   ?: 0,
             isRunning   = BellService.isRunning,
             isPaused    = BellService.isPaused,
+            prefsLoaded = true
         )}
     }
 
-    fun setStartTime(h: Int, m: Int) { _state.update { it.copy(startHour = h, startMinute = m) }; savePrefs() }
-    fun setEndTime(h: Int, m: Int)   { _state.update { it.copy(endHour   = h, endMinute   = m) }; savePrefs() }
+    fun setStartTime(h: Int, m: Int) {
+        _state.update { it.copy(startHour = h, startMinute = m) }
+        savePrefs()
+    }
+
+    fun setEndTime(h: Int, m: Int) {
+        _state.update { it.copy(endHour = h, endMinute = m) }
+        savePrefs()
+    }
 
     private fun savePrefs() = viewModelScope.launch {
-        val ctx = getApplication<Application>(); val s = _state.value
+        val ctx = getApplication<Application>()
+        val s   = _state.value
         ctx.settingsDataStore.edit { p ->
             p[intPreferencesKey("start_hour")]   = s.startHour
             p[intPreferencesKey("start_minute")] = s.startMinute
@@ -66,6 +77,9 @@ class BellViewModel(application: Application) : AndroidViewModel(application) {
 
     fun start(ctx: Context) {
         val s = _state.value
+        android.util.Log.d("BellViewModel",
+            "Starting session: ${s.startHour}:${s.startMinute} - ${s.endHour}:${s.endMinute}")
+
         ctx.startForegroundService(Intent(ctx, BellService::class.java).apply {
             action = BellService.ACTION_START
             putExtra(BellService.EXTRA_START_HOUR,   s.startHour)
