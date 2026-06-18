@@ -8,21 +8,25 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.media.AudioAttributes
+import android.media.AudioManager
+import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.threesecond.reset.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import java.util.Calendar
 
 class BellService : Service() {
@@ -87,14 +91,13 @@ class BellService : Service() {
                     .putInt(EXTRA_END_MINUTE,   endMinute)
                     .apply()
 
-                // Toast on main thread so you can see what the service received
-                val cal   = Calendar.getInstance()
-                val nowH  = cal.get(Calendar.HOUR_OF_DAY)
-                val nowM2 = cal.get(Calendar.MINUTE)
+                val cal    = Calendar.getInstance()
+                val nowH   = cal.get(Calendar.HOUR_OF_DAY)
+                val nowMin = cal.get(Calendar.MINUTE)
                 mainHandler.post {
                     Toast.makeText(
                         applicationContext,
-                        "Now: $nowH:${"%02d".format(nowM2)} | Window: $startHour:${"%02d".format(startMinute)}-$endHour:${"%02d".format(endMinute)}",
+                        "Now: $nowH:${"%02d".format(nowMin)} | Window: $startHour:${"%02d".format(startMinute)}-$endHour:${"%02d".format(endMinute)}",
                         Toast.LENGTH_LONG
                     ).show()
                 }
@@ -102,7 +105,7 @@ class BellService : Service() {
                 isRunning = true
                 isPaused  = false
 
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     startForeground(NOTIFICATION_ID, buildNotification("Active"),
                         android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
                 } else {
@@ -125,7 +128,6 @@ class BellService : Service() {
                 stopSelf()
             }
             null -> {
-                // Android restarted us after kill — restore from prefs
                 startHour   = prefs.getInt(EXTRA_START_HOUR,   7)
                 startMinute = prefs.getInt(EXTRA_START_MINUTE, 0)
                 endHour     = prefs.getInt(EXTRA_END_HOUR,     22)
@@ -133,7 +135,7 @@ class BellService : Service() {
                 isRunning   = true
                 isPaused    = false
 
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     startForeground(NOTIFICATION_ID, buildNotification("Active"),
                         android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
                 } else {
@@ -170,11 +172,12 @@ class BellService : Service() {
                 val remaining = if (!isPaused && inWindow)
                     (nextVibeAt - now).coerceAtLeast(0) else -1L
 
-                LocalBroadcastManager.getInstance(applicationContext).sendBroadcast(Intent(BROADCAST_TICK).apply {
-                    putExtra(EXTRA_NEXT_MS,   remaining)
-                    putExtra(EXTRA_PAUSED,    isPaused)
-                    putExtra(EXTRA_IN_WINDOW, inWindow)
-                })
+                LocalBroadcastManager.getInstance(applicationContext)
+                    .sendBroadcast(Intent(BROADCAST_TICK).apply {
+                        putExtra(EXTRA_NEXT_MS,   remaining)
+                        putExtra(EXTRA_PAUSED,    isPaused)
+                        putExtra(EXTRA_IN_WINDOW, inWindow)
+                    })
 
                 delay(1000L)
             }
@@ -188,7 +191,7 @@ class BellService : Service() {
         val endM   = endHour   * 60 + endMinute
         val result = nowM in startM..endM
         android.util.Log.d("BellService",
-            "nowM=$nowM startM=$startM endM=$endM inWindow=$result (${startHour}:${"%02d".format(startMinute)}-${endHour}:${"%02d".format(endMinute)})")
+            "nowM=$nowM startM=$startM endM=$endM inWindow=$result")
         return result
     }
 
@@ -205,18 +208,45 @@ class BellService : Service() {
     }
 
     private fun vibrate() {
-        val effect = VibrationEffect.createOneShot(80, VibrationEffect.DEFAULT_AMPLITUDE)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-            (getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager)
-                .defaultVibrator.vibrate(effect)
+        // 200ms strong pulse — long enough to feel clearly through any pocket/sleeve
+        val effect = VibrationEffect.createOneShot(200, VibrationEffect.DEFAULT_AMPLITUDE)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vm = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            val vibrator = vm.defaultVibrator
+
+            // VibrationAttributes with USAGE_ALARM bypasses silent and DND mode
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val attrs = VibrationAttributes.Builder()
+                    .setUsage(VibrationAttributes.USAGE_ALARM)
+                    .build()
+                vibrator.vibrate(effect, attrs)
+            } else {
+                // API 31-32: use AudioAttributes with USAGE_ALARM as workaround
+                val audioAttrs = AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .build()
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(effect, audioAttrs)
+            }
         } else {
+            // API 26-30
             @Suppress("DEPRECATION")
-            (getSystemService(Context.VIBRATOR_SERVICE) as Vibrator).vibrate(effect)
+            val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+            val audioAttrs = AudioAttributes.Builder()
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(AudioAttributes.USAGE_ALARM)
+                .build()
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(effect, audioAttrs)
         }
     }
 
     private fun createNotificationChannel() {
-        val channel = NotificationChannel(CHANNEL_ID, "3 Second Reset", NotificationManager.IMPORTANCE_LOW).apply {
+        val channel = NotificationChannel(
+            CHANNEL_ID, "3 Second Reset", NotificationManager.IMPORTANCE_LOW
+        ).apply {
             description = "Session indicator"
             setSound(null, null)
             enableVibration(false)
@@ -239,7 +269,8 @@ class BellService : Service() {
     }
 
     private fun updateNotification(text: String) {
-        getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, buildNotification(text))
+        getSystemService(NotificationManager::class.java)
+            .notify(NOTIFICATION_ID, buildNotification(text))
     }
 
     override fun onDestroy() {
