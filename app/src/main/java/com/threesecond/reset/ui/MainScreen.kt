@@ -20,9 +20,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.threesecond.reset.ui.theme.Gold
-import com.threesecond.reset.ui.theme.GoldDim
+import com.threesecond.reset.ui.theme.GoldDark
 import com.threesecond.reset.ui.theme.GoldFaint
-import com.threesecond.reset.ui.theme.SurfaceCard
+import com.threesecond.reset.ui.theme.TextSecondary
 
 @Composable
 fun MainScreen(viewModel: BellViewModel) {
@@ -35,7 +35,7 @@ fun MainScreen(viewModel: BellViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(Color.White)
             .padding(horizontal = 24.dp)
             .padding(top = 56.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
@@ -52,18 +52,18 @@ fun MainScreen(viewModel: BellViewModel) {
             Text(
                 text = "One vibration every 6 minutes",
                 fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = TextSecondary
             )
         }
 
-        HorizontalDivider(color = MaterialTheme.colorScheme.outline, thickness = 0.5.dp)
+        HorizontalDivider(color = Color(0xFFEEEEEE), thickness = 0.5.dp)
 
-        // Active hours section
+        // Active hours label
         Text(
-            text = "Active hours",
+            text = "ACTIVE HOURS",
             fontSize = 11.sp,
             fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = TextSecondary,
             letterSpacing = 1.sp
         )
 
@@ -84,22 +84,15 @@ fun MainScreen(viewModel: BellViewModel) {
             )
         }
 
-        Spacer(Modifier.height(4.dp))
-
-        // Status card — only visible when running
         if (state.isRunning) {
-            StatusCard(state)
             Spacer(Modifier.height(4.dp))
+            StatusCard(state)
         }
 
         Spacer(Modifier.weight(1f))
 
-        // Action buttons
         if (!state.isRunning) {
-            GoldButton(
-                text = "Start session",
-                onClick = { viewModel.start(ctx) }
-            )
+            GoldButton(text = "Start session", onClick = { viewModel.start(ctx) })
         } else {
             GoldButton(
                 text = if (state.isPaused) "Resume" else "Pause",
@@ -111,11 +104,7 @@ fun MainScreen(viewModel: BellViewModel) {
                 onClick = { viewModel.stop(ctx) },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = "Stop session",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 14.sp
-                )
+                Text("Stop session", color = TextSecondary, fontSize = 14.sp)
             }
         }
     }
@@ -148,19 +137,23 @@ fun TimeButton(label: String, value: String, enabled: Boolean, modifier: Modifie
         modifier = modifier.height(64.dp),
         shape = RoundedCornerShape(12.dp),
         colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = SurfaceCard,
-            disabledContainerColor = SurfaceCard.copy(alpha = 0.5f)
+            containerColor = Color.White,
+            disabledContainerColor = Color(0xFFF9F9F9)
         ),
         border = androidx.compose.foundation.BorderStroke(
             0.5.dp,
-            if (enabled) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+            if (enabled) Color(0xFFDDDDDD) else Color(0xFFEEEEEE)
         )
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(label, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(label, fontSize = 10.sp, color = TextSecondary)
             Spacer(Modifier.height(2.dp))
-            Text(value, fontSize = 20.sp, fontWeight = FontWeight.Medium,
-                color = if (enabled) Gold else GoldDim)
+            Text(
+                value,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Medium,
+                color = if (enabled) Gold else Color(0xFFCCAA44)
+            )
         }
     }
 }
@@ -178,16 +171,11 @@ fun StatusCard(state: AppState) {
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             val statusText = when {
-                state.isPaused    -> "Paused"
-                state.inWindow    -> "Next reset in"
-                else              -> "Waiting for active window"
+                state.isPaused -> "Paused"
+                state.inWindow -> "Next reset in"
+                else           -> "Waiting for active window"
             }
-            Text(
-                text = statusText,
-                fontSize = 12.sp,
-                color = GoldDim,
-                letterSpacing = 0.5.sp
-            )
+            Text(text = statusText, fontSize = 12.sp, color = GoldDark, letterSpacing = 0.5.sp)
 
             if (state.inWindow && !state.isPaused && state.nextBuzzMs > 0) {
                 AnimatedContent(
@@ -227,7 +215,7 @@ fun GoldButton(text: String, outlined: Boolean = false, onClick: () -> Unit) {
             shape = RoundedCornerShape(26.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Gold,
-                contentColor   = Color(0xFF1A1400)
+                contentColor   = Color.White
             )
         ) {
             Text(text, fontSize = 16.sp, fontWeight = FontWeight.Medium)
@@ -247,12 +235,18 @@ fun GoldTimePickerDialog(
     val pickerState = rememberTimePickerState(initialHour = initialHour, initialMinute = initialMinute, is24Hour = true)
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor   = SurfaceCard,
+        containerColor   = Color.White,
         titleContentColor = Gold,
         title = { Text(title) },
         text  = { TimePicker(state = pickerState) },
-        confirmButton = { TextButton(onClick = { onConfirm(pickerState.hour, pickerState.minute) }) { Text("OK", color = Gold) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant) } }
+        confirmButton = {
+            TextButton(onClick = { onConfirm(pickerState.hour, pickerState.minute) }) {
+                Text("OK", color = Gold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel", color = TextSecondary) }
+        }
     )
 }
 

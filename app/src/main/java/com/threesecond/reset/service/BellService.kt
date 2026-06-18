@@ -70,7 +70,12 @@ class BellService : Service() {
                 endMinute   = intent.getIntExtra(EXTRA_END_MINUTE,   0)
                 isRunning   = true
                 isPaused    = false
-                startForeground(NOTIFICATION_ID, buildNotification("Active"))
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    startForeground(NOTIFICATION_ID, buildNotification("Active"),
+                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+                } else {
+                    startForeground(NOTIFICATION_ID, buildNotification("Active"))
+                }
                 scheduleNext()
                 startTickLoop()
             }
