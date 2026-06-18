@@ -22,6 +22,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import java.util.Calendar
 
 class BellService : Service() {
@@ -169,7 +170,7 @@ class BellService : Service() {
                 val remaining = if (!isPaused && inWindow)
                     (nextVibeAt - now).coerceAtLeast(0) else -1L
 
-                sendBroadcast(Intent(BROADCAST_TICK).apply {
+                LocalBroadcastManager.getInstance(applicationContext).sendBroadcast(Intent(BROADCAST_TICK).apply {
                     putExtra(EXTRA_NEXT_MS,   remaining)
                     putExtra(EXTRA_PAUSED,    isPaused)
                     putExtra(EXTRA_IN_WINDOW, inWindow)

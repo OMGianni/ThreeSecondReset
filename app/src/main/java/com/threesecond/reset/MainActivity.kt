@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.threesecond.reset.service.BellService
 import com.threesecond.reset.ui.BellViewModel
 import com.threesecond.reset.ui.MainScreen
@@ -29,7 +30,7 @@ class MainActivity : ComponentActivity() {
     private val tickReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             viewModel.onTick(
-                nextMs   = intent.getLongExtra(BellService.EXTRA_NEXT_MS,   -1L),
+                nextMs   = intent.getLongExtra(BellService.EXTRA_NEXT_MS,    -1L),
                 paused   = intent.getBooleanExtra(BellService.EXTRA_PAUSED,   false),
                 inWindow = intent.getBooleanExtra(BellService.EXTRA_IN_WINDOW, false)
             )
@@ -38,13 +39,14 @@ class MainActivity : ComponentActivity() {
 
     private val notifPermLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { /* proceed regardless */ }
+    ) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
         ) {
             notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
@@ -60,17 +62,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        val filter = IntentFilter(BellService.BROADCAST_TICK)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(tickReceiver, filter, RECEIVER_NOT_EXPORTED)
-        } else {
-            @Suppress("UnspecifiedRegisterReceiverFlag")
-            registerReceiver(tickReceiver, filter)
-        }
+        // Use LocalBroadcastManager — works reliably for same-app broadcasts
+        LocalBroadcastManager.getInstance(this)
+            .registerReceiver(tickReceiver, IntentFilter(BellService.BROADCAST_TICK))
     }
 
     override fun onPause() {
         super.onPause()
-        unregisterReceiver(tickReceiver)
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(tickReceiver)
     }
 }
