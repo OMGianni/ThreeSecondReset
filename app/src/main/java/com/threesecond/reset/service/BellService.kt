@@ -8,10 +8,13 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.threesecond.reset.MainActivity
 import kotlinx.coroutines.CoroutineScope
@@ -50,8 +53,8 @@ class BellService : Service() {
 
     private val serviceScope = CoroutineScope(Dispatchers.Default)
     private var timerJob: Job? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
 
-    // These always reflect the current active window
     private var startHour   = 7
     private var startMinute = 0
     private var endHour     = 22
@@ -71,7 +74,6 @@ class BellService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
-                // Load from intent and persist so we survive restarts
                 startHour   = intent.getIntExtra(EXTRA_START_HOUR,   prefs.getInt(EXTRA_START_HOUR,   7))
                 startMinute = intent.getIntExtra(EXTRA_START_MINUTE, prefs.getInt(EXTRA_START_MINUTE, 0))
                 endHour     = intent.getIntExtra(EXTRA_END_HOUR,     prefs.getInt(EXTRA_END_HOUR,     22))
@@ -83,6 +85,18 @@ class BellService : Service() {
                     .putInt(EXTRA_END_HOUR,     endHour)
                     .putInt(EXTRA_END_MINUTE,   endMinute)
                     .apply()
+
+                // Toast on main thread so you can see what the service received
+                val cal   = Calendar.getInstance()
+                val nowH  = cal.get(Calendar.HOUR_OF_DAY)
+                val nowM2 = cal.get(Calendar.MINUTE)
+                mainHandler.post {
+                    Toast.makeText(
+                        applicationContext,
+                        "Now: $nowH:${"%02d".format(nowM2)} | Window: $startHour:${"%02d".format(startMinute)}-$endHour:${"%02d".format(endMinute)}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
 
                 isRunning = true
                 isPaused  = false
@@ -110,8 +124,7 @@ class BellService : Service() {
                 stopSelf()
             }
             null -> {
-                // Service restarted by Android after being killed (START_STICKY)
-                // Restore times from prefs
+                // Android restarted us after kill — restore from prefs
                 startHour   = prefs.getInt(EXTRA_START_HOUR,   7)
                 startMinute = prefs.getInt(EXTRA_START_MINUTE, 0)
                 endHour     = prefs.getInt(EXTRA_END_HOUR,     22)
@@ -150,7 +163,6 @@ class BellService : Service() {
                         scheduleNext()
                     }
                 } else if (!inWindow) {
-                    // Reset timer so it fires promptly when window opens
                     nextVibeAt = nextWindowStart()
                 }
 
@@ -173,13 +185,10 @@ class BellService : Service() {
         val nowM   = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
         val startM = startHour * 60 + startMinute
         val endM   = endHour   * 60 + endMinute
-
-        // Log for debugging
+        val result = nowM in startM..endM
         android.util.Log.d("BellService",
-            "Window check: now=${cal.get(Calendar.HOUR_OF_DAY)}:${cal.get(Calendar.MINUTE)} " +
-            "($nowM min) | window=$startHour:$startMinute-$endHour:$endMinute ($startM-$endM min) | inWindow=${nowM in startM..endM}")
-
-        return nowM in startM..endM
+            "nowM=$nowM startM=$startM endM=$endM inWindow=$result (${startHour}:${"%02d".format(startMinute)}-${endHour}:${"%02d".format(endMinute)})")
+        return result
     }
 
     private fun nextWindowStart(): Long {

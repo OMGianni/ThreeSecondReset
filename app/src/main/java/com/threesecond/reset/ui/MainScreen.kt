@@ -42,19 +42,12 @@ fun MainScreen(viewModel: BellViewModel) {
     ) {
 
         // Header
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                text = "3 Second Reset",
-                fontSize = 26.sp,
-                fontWeight = FontWeight.Medium,
-                color = Gold
-            )
-            Text(
-                text = "One vibration every 6 minutes",
-                fontSize = 13.sp,
-                color = TextSecondary
-            )
-        }
+        Text(
+            text = "3 Second Reset",
+            fontSize = 26.sp,
+            fontWeight = FontWeight.Medium,
+            color = Gold
+        )
 
         HorizontalDivider(color = Color(0xFFEEEEEE), thickness = 0.5.dp)
 
